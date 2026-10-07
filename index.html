@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>월급루팡 서바이벌</title>
+<style>
+  :root {
+    --bg:#e7ecf3; --win:#ffffff; --line:#d9dfe8; --text:#1e293b; --muted:#64748b;
+    --accent:#2563eb; --good:#16a34a; --bad:#dc2626; --warn:#f59e0b; --slack:#7c3aed;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; }
+  body { background:var(--bg); color:var(--text); min-height:100vh;
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; }
+  button { font:inherit; color:inherit; }
+  kbd { font-family:ui-monospace,Consolas,monospace; font-size:.85em; background:#f1f5f9; border:1px solid #cbd5e1;
+    border-bottom-width:2px; border-radius:5px; padding:1px 6px; color:#334155; }
+
+  /* ---------- window ---------- */
+  .app { max-width:1200px; margin:20px auto; background:#f6f8fb; border-radius:14px; overflow:hidden;
+    box-shadow:0 20px 60px rgba(15,23,42,.18); border:1px solid #cfd6e1; }
+  .app.shake { animation:shake .5s; }
+  .titlebar { display:flex; align-items:center; gap:12px; padding:10px 16px; background:#1e3a8a; color:#fff; font-size:14px; }
+  .titlebar .logo { font-weight:800; letter-spacing:.5px; }
+  .titlebar .who { margin-left:auto; opacity:.85; font-size:13px; }
+  .titlebar .winbtn { display:flex; gap:14px; margin-left:16px; opacity:.8; }
+  .content { padding:16px; display:flex; flex-direction:column; gap:14px; }
+
+  /* ---------- HUD ---------- */
+  .hud { display:grid; grid-template-columns:1.15fr 1fr 1fr 1fr; gap:12px; }
+  .card { background:var(--win); border:1px solid var(--line); border-radius:12px; padding:14px 16px; position:relative; }
+  .label { font-size:13px; color:var(--muted); font-weight:600; }
+  .clock .time { font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; margin-top:2px; }
+  .clock .sub { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-top:2px; }
+  .clock .sub b { color:var(--text); }
+  .stat .top { display:flex; justify-content:space-between; align-items:baseline; }
+  .stat .val { font-size:28px; font-weight:800; font-variant-numeric:tabular-nums; transition:color .3s; }
+  .stat .val small { font-size:14px; color:var(--muted); font-weight:600; }
+  .bar { height:10px; background:#edf1f7; border-radius:99px; overflow:hidden; margin-top:10px; }
+  .bar i { display:block; height:100%; width:0; border-radius:inherit;
+    transition:width .7s cubic-bezier(.2,.8,.2,1), background .4s; }
+  #dayFill { background:linear-gradient(90deg,#c4b5fd,#7c3aed); }
+  #stat-work .bar i { background:linear-gradient(90deg,#93c5fd,#2563eb); }
+  #stat-mental .bar i { background:linear-gradient(90deg,#86efac,#16a34a); }
+  #stat-mental[data-level=mid] .bar i { background:linear-gradient(90deg,#fde68a,#f59e0b); }
+  #stat-mental[data-level=low] .bar i { background:linear-gradient(90deg,#fca5a5,#dc2626); }
+  #stat-mental[data-level=low] .val { color:var(--bad); }
+  #stat-susp .bar i { background:linear-gradient(90deg,#d9f99d,#65a30d); }
+  #stat-susp[data-level=mid] .bar i { background:linear-gradient(90deg,#fde68a,#f59e0b); }
+  #stat-susp[data-level=high] .bar i { background:linear-gradient(90deg,#fca5a5,#dc2626); box-shadow:0 0 12px #dc2626; }
+  #stat-susp[data-level=high] .val { color:var(--bad); }
+  .hint { font-size:12px; color:var(--muted); margin-top:6px; }
+
+  .float { position:absolute; right:16px; top:10px; font-weight:800; font-size:18px; pointer-events:none;
+    animation:floatUp 1.2s ease-out forwards; }
+  .float.good { color:var(--good); } .float.bad { color:var(--bad); }
+  @keyframes floatUp { 0%{ opacity:0; transform:translateY(8px) scale(.8);} 15%{opacity:1; transform:translateY(0) scale(1.15);} 100%{ opacity:0; transform:translateY(-28px);} }
+
+  /* ---------- main ---------- */
+  .main { display:grid; grid-template-columns:1fr 340px; gap:14px; }
+  .monitor { background:#1f2430; border-radius:14px; padding:12px 12px 0; box-shadow:0 10px 30px rgba(15,23,42,.25); }
+  .monitor.switch .screen { animation:switchFlash .35s; }
+  @keyframes switchFlash { 0%{ filter:brightness(3) blur(2px); transform:scale(.98);} 100%{ filter:none; transform:none;} }
+  .screen { position:relative; height:350px; background:#fff; border-radius:6px 6px 0 0; overflow:hidden; display:flex; flex-direction:column; }
+  .screen-content { flex:1; overflow:hidden; position:relative; }
+  .taskbar { height:30px; flex:none; background:#e2e8f0; display:flex; align-items:center; gap:12px; padding:0 10px;
+    font-size:12px; color:#334155; border-top:1px solid #cbd5e1; }
+  .taskbar .app-tab { background:#fff; border-radius:4px; padding:2px 10px; border-bottom:2px solid var(--accent); }
+  .taskbar .mini-clock { margin-left:auto; font-variant-numeric:tabular-nums; }
+  .bezel-bottom { height:14px; display:flex; justify-content:center; align-items:center; }
+  .bezel-bottom i { width:6px; height:6px; border-radius:50%; background:#22c55e; box-shadow:0 0 6px #22c55e; }
+
+  /* excel */
+  .xl { height:100%; display:flex; flex-direction:column; font-size:12px; }
+  .xl-top { background:#217346; color:#fff; padding:7px 12px; display:flex; align-items:center; gap:8px; font-weight:600; }
+  .xl-top .x { background:#fff; color:#217346; font-weight:900; border-radius:3px; padding:0 5px; }
+  .xl-top .save { margin-left:auto; font-weight:400; opacity:.9; }
+  .xl-formula { padding:5px 12px; border-bottom:1px solid #e2e8f0; color:#334155; font-family:Consolas,monospace; }
+  .xl-formula b { color:#217346; margin-right:8px; font-style:italic; }
+  .xl table { border-collapse:collapse; width:100%; }
+  .xl th { background:#f1f5f9; color:#64748b; font-weight:500; border:1px solid #e2e8f0; padding:4px; }
+  .xl td { border:1px solid #e2e8f0; padding:5px 8px; text-align:right; font-variant-numeric:tabular-nums; transition:background .2s; }
+  .xl td.lbl { text-align:left; font-weight:600; }
+  .xl.typing td:not(.lbl) { animation:cellIn .4s backwards; animation-delay:var(--d); }
+  .xl td.hl { background:#dcfce7; outline:2px solid #217346; outline-offset:-2px; }
+  @keyframes cellIn { from{ color:transparent; background:#ecfdf5; } }
+  .cursor { position:absolute; font-size:20px; transition:left .35s, top .35s; pointer-events:none; }
+
+  /* webtoon */
+  .wt { height:100%; background:#0f0f12; color:#fff; display:flex; flex-direction:column; }
+  .wt-bar { background:#00c73c; padding:7px 12px; font-weight:700; font-size:13px; display:flex; gap:8px; }
+  .wt-bar span { margin-left:auto; font-weight:400; opacity:.9; }
+  .wt-scroll { flex:1; position:relative; overflow:hidden; }
+  .wt-strip { position:absolute; left:50%; width:280px; transform:translateX(-50%); animation:scrollUp 14s linear infinite; }
+  @keyframes scrollUp { from{ transform:translate(-50%,0);} to{ transform:translate(-50%,-50%);} }
+  .panel { height:170px; margin:12px 0; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:64px; position:relative; }
+  .panel .bubble { position:absolute; top:10px; left:10px; right:auto; max-width:85%; background:#fff; color:#111; font-size:12px;
+    padding:6px 10px; border-radius:12px; font-weight:700; }
+  .p1 { background:linear-gradient(135deg,#fda4af,#f472b6); } .p2 { background:linear-gradient(135deg,#fde047,#f97316); }
+  .p3 { background:linear-gradient(135deg,#67e8f9,#3b82f6); } .p4 { background:linear-gradient(135deg,#c4b5fd,#7c3aed); }
+
+  /* scenes */
+  .scene { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; padding:20px; }
+  .scene.coffee { background:radial-gradient(circle at 50% 40%,#fff7ed,#fde68a); }
+  .scene.toilet { background:radial-gradient(circle at 50% 40%,#f0f9ff,#bae6fd); }
+  .scene .big { font-size:90px; position:relative; animation:bob 1.6s ease-in-out infinite; }
+  .scene .steam { position:absolute; left:50%; top:-24px; font-size:28px; color:#a8a29e; animation:steam 1.5s ease-out infinite; }
+  .scene p { margin:0; font-weight:700; font-size:16px; }
+  .scene small { color:var(--muted); }
+  .status-away { display:inline-flex; align-items:center; gap:6px; background:#fff; border-radius:99px; padding:4px 12px; font-size:13px; font-weight:600; }
+  .status-away i { width:9px; height:9px; border-radius:50%; background:#facc15; }
+  @keyframes bob { 50%{ transform:translateY(-8px) rotate(-3deg);} }
+  @keyframes steam { 0%{ opacity:0; transform:translate(-50%,10px);} 50%{opacity:1;} 100%{ opacity:0; transform:translate(-50%,-20px);} }
+
+  /* toasts */
+  .toasts { position:absolute; right:12px; top:46px; width:310px; display:flex; flex-direction:column; gap:8px; z-index:5; }
+  .toast { background:#fff; border-radius:10px; box-shadow:0 12px 30px rgba(0,0,0,.28); padding:10px 12px; font-size:13px;
+    border-left:4px solid var(--muted); animation:toastIn .4s cubic-bezier(.2,1.4,.4,1); line-height:1.45; }
+  .toast.good { border-color:var(--good); } .toast.bad { border-color:var(--bad); }
+  .toast b { display:block; font-size:14px; margin-bottom:2px; }
+  .toast.out { animation:toastOut .3s forwards; }
+  @keyframes toastIn { from{ opacity:0; transform:translateX(40px) scale(.9);} }
+  @keyframes toastOut { to{ opacity:0; transform:translateX(40px);} }
+  .chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+  .chip { font-size:11px; font-weight:700; border-radius:99px; padding:1px 8px; }
+  .chip.good { background:#dcfce7; color:#15803d; } .chip.bad { background:#fee2e2; color:#b91c1c; }
+
+  /* actions */
+  .actions { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-top:14px; }
+  .action { position:relative; background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px 8px 12px;
+    cursor:pointer; text-align:center; overflow:hidden; transition:transform .12s, box-shadow .15s, border-color .15s, opacity .2s; }
+  .action:hover:not(:disabled) { transform:translateY(-3px); box-shadow:0 10px 22px rgba(37,99,235,.16); border-color:#93c5fd; }
+  .action:active:not(:disabled) { transform:scale(.96); }
+  .action:disabled { opacity:.45; cursor:not-allowed; }
+  .action .ic { font-size:32px; display:block; }
+  .action .nm { font-weight:800; margin-top:6px; font-size:14px; }
+  .action .ht { font-size:11px; color:var(--muted); margin-top:4px; line-height:1.45; }
+  .action .key { position:absolute; top:6px; left:8px; font-size:11px; color:#94a3b8; border:1px solid #cbd5e1; border-radius:4px; padding:0 5px; }
+  .action .badge { position:absolute; top:6px; right:8px; font-size:11px; font-weight:700; color:#b45309; background:#fef3c7; border-radius:99px; padding:0 7px; }
+  .action .badge:empty { display:none; }
+  .action.running { border-color:var(--accent); }
+  .action.running .ic { animation:hop .5s; }
+  .action.running::after { content:""; position:absolute; left:0; bottom:0; height:4px; background:var(--accent); animation:prog .55s linear forwards; }
+  @keyframes hop { 30%{ transform:translateY(-10px) scale(1.2);} 60%{ transform:translateY(0) scale(.95);} }
+  @keyframes prog { from{ width:0;} to{ width:100%;} }
+
+  /* log */
+  .log { display:flex; flex-direction:column; padding:14px 0 10px; contain:size; min-height:300px; }
+  .log h3 { margin:0 16px 10px; font-size:15px; display:flex; justify-content:space-between; align-items:center; }
+  .log h3 span { font-size:12px; color:var(--muted); font-weight:500; }
+  .log ul { list-style:none; margin:0; padding:0 12px; overflow-y:auto; flex:1; min-height:0; }
+  .log li { padding:8px 10px; border-radius:8px; margin-bottom:6px; font-size:13px; line-height:1.5; background:#f8fafc;
+    border-left:3px solid #cbd5e1; animation:slideIn .35s; }
+  .log li .t { display:block; font-size:11px; color:#94a3b8; font-variant-numeric:tabular-nums; }
+  .log li.work { border-color:var(--accent); }
+  .log li.slack { border-color:var(--slack); background:#faf5ff; }
+  .log li.good { border-color:var(--good); background:#f0fdf4; }
+  .log li.bad { border-color:var(--bad); background:#fef2f2; }
+  .log li.boss { border-color:var(--bad); background:#dc2626; color:#fff; font-weight:700; }
+  .log li.boss .t { color:#fecaca; }
+  @keyframes slideIn { from{ opacity:0; transform:translateY(-8px);} }
+
+  /* boss alert */
+  .boss { position:fixed; top:-260px; left:50%; transform:translateX(-50%); z-index:50; width:min(520px,92vw);
+    background:#dc2626; color:#fff; border-radius:18px; padding:18px 22px; text-align:center;
+    box-shadow:0 24px 60px rgba(220,38,38,.55); transition:top .3s cubic-bezier(.2,1.4,.4,1); }
+  .boss.show { top:22px; }
+  .boss h2 { margin:0; font-size:26px; animation:blink .45s infinite alternate; }
+  .boss .walker { font-size:30px; display:inline-block; animation:walk .5s infinite alternate; }
+  .boss .sec { font-size:14px; opacity:.9; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .boss .tbar { height:8px; background:rgba(255,255,255,.3); border-radius:99px; overflow:hidden; margin:10px 0 14px; }
+  .boss .tbar i { display:block; height:100%; width:100%; background:#fff; }
+  .boss button { width:100%; background:#fff; color:#dc2626; border:0; border-radius:12px; padding:14px; font-size:19px; font-weight:900;
+    cursor:pointer; animation:pulse .6s infinite; }
+  .boss button kbd { font-size:13px; margin-left:6px; }
+  @keyframes blink { to{ opacity:.6; } }
+  @keyframes walk { from{ transform:translateX(-6px) rotate(-6deg);} to{ transform:translateX(6px) rotate(6deg);} }
+  @keyframes pulse { 50%{ transform:scale(1.03); box-shadow:0 0 0 6px rgba(255,255,255,.35);} }
+
+  /* danger vignette */
+  .vignette { position:fixed; inset:0; pointer-events:none; z-index:40; }
+  body.danger .vignette { animation:dangerPulse 1.8s ease-in-out infinite; }
+  body.alert .vignette { animation:alertPulse .5s ease-in-out infinite; }
+  @keyframes dangerPulse { 0%,100%{ box-shadow:inset 0 0 50px rgba(220,38,38,.12);} 50%{ box-shadow:inset 0 0 160px rgba(220,38,38,.45);} }
+  @keyframes alertPulse { 0%,100%{ box-shadow:inset 0 0 80px rgba(220,38,38,.25); background:rgba(220,38,38,.03);} 50%{ box-shadow:inset 0 0 220px rgba(220,38,38,.6); background:rgba(220,38,38,.1);} }
+  @keyframes shake { 10%,90%{ transform:translateX(-2px);} 20%,80%{ transform:translateX(4px);} 30%,50%,70%{ transform:translateX(-8px);} 40%,60%{ transform:translateX(8px);} }
+
+  /* modal */
+  .modal { position:fixed; inset:0; z-index:60; background:rgba(15,23,42,.55); backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; padding:16px; }
+  .modal.show { display:flex; }
+  .dialog { background:#fff; border-radius:20px; padding:30px 32px 26px; width:min(540px,100%); text-align:center;
+    box-shadow:0 30px 80px rgba(0,0,0,.35); animation:pop .4s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes pop { from{ opacity:0; transform:scale(.85) translateY(10px);} }
+  .dialog h1 { margin:6px 0 4px; font-size:32px; }
+  .dialog h2 { margin:8px 0; font-size:24px; }
+  .dialog p { color:#475569; line-height:1.65; margin:8px 0; }
+  .primary { background:var(--accent); color:#fff; border:0; border-radius:12px; padding:13px 30px; font-size:17px; font-weight:800;
+    cursor:pointer; margin-top:18px; transition:transform .12s, filter .12s; }
+  .primary:hover { filter:brightness(1.1); transform:translateY(-2px); }
+  .primary.danger { background:var(--bad); }
+  .enter-hint { display:block; font-size:12px; color:#94a3b8; margin-top:8px; }
+  .big-emoji { font-size:68px; line-height:1; animation:bob 2s ease-in-out infinite; display:inline-block; }
+  .rules { list-style:none; padding:0; margin:14px 0; display:grid; gap:6px; text-align:left; background:#f8fafc; border-radius:12px; padding:14px 18px; }
+  .keys { display:flex; justify-content:center; gap:16px; flex-wrap:wrap; font-size:13px; color:var(--muted); }
+  .penalty { display:flex; justify-content:center; gap:8px; margin-top:6px; }
+  .penalty .chip { font-size:13px; padding:3px 12px; }
+  .end-tag { font-size:13px; color:var(--muted); font-weight:700; letter-spacing:2px; margin-top:8px; }
+  .quote { font-size:16px; font-style:italic; }
+  .end-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:16px; }
+  .end-stats div { background:#f8fafc; border-radius:10px; padding:10px 6px; }
+  .end-stats b { display:block; font-size:22px; font-variant-numeric:tabular-nums; }
+  .end-stats span { font-size:12px; color:var(--muted); }
+
+  @media (max-width:900px) {
+    .hud { grid-template-columns:1fr 1fr; }
+    .main { grid-template-columns:1fr; }
+    .log { contain:none; height:320px; }
+    .actions { grid-template-columns:repeat(3,1fr); }
+    .app { margin:0; border-radius:0; }
+  }
+</style>
+</head>
+<body>
+<div class="vignette"></div>
+
+<div class="app" id="app">
+  <div class="titlebar">
+    <span class="logo">🏢 (주)무한성장 그룹웨어</span>
+    <span style="opacity:.7">| 월급루팡 서바이벌</span>
+    <span class="who">👤 김대리 · 경영지원팀 · 🟢 근무 중</span>
+    <span class="winbtn"><span>—</span><span>▢</span><span>✕</span></span>
+  </div>
+
+  <div class="content">
+    <section class="hud">
+      <div class="card clock" id="stat-time">
+        <div class="label">🕐 현재 시간</div>
+        <div class="time" id="time">오후 1:00</div>
+        <div class="sub"><span>퇴근 <b id="endTime">오후 6:00</b></span><span id="remain">퇴근까지 300분</span></div>
+        <div class="bar"><i id="dayFill"></i></div>
+      </div>
+      <div class="card stat" id="stat-work">
+        <div class="top"><span class="label">📊 업무 진행도</span><span class="val"><span id="val-work">0</span><small>%</small></span></div>
+        <div class="bar"><i id="bar-work"></i></div>
+        <div class="hint">퇴근 전 최소 50%는 채워야 한다</div>
+      </div>
+      <div class="card stat" id="stat-mental">
+        <div class="top"><span class="label">🧠 멘탈</span><span class="val"><span id="val-mental">0</span><small>/100</small></span></div>
+        <div class="bar"><i id="bar-mental"></i></div>
+        <div class="hint">0이 되면 그대로 번아웃</div>
+      </div>
+      <div class="card stat" id="stat-susp">
+        <div class="top"><span class="label">👀 상사 의심도</span><span class="val"><span id="val-susp">0</span><small>/100</small></span></div>
+        <div class="bar"><i id="bar-susp"></i></div>
+        <div class="hint">100이 되면 즉시 면담행</div>
+      </div>
+    </section>
+
+    <section class="main">
+      <div>
+        <div class="monitor" id="monitor">
+          <div class="screen">
+            <div class="screen-content" id="screen"></div>
+            <div class="toasts" id="toasts"></div>
+            <div class="taskbar">
+              <span>🪟</span><span class="app-tab" id="appTab">📗 Excel</span><span>💬 사내메신저</span><span>📧 Outlook (99+)</span>
+              <span class="mini-clock" id="miniClock">오후 1:00</span>
+            </div>
+          </div>
+          <div class="bezel-bottom"><i></i></div>
+        </div>
+        <div class="actions" id="actions"></div>
+      </div>
+
+      <aside class="card log">
+        <h3>💬 사내 메신저 · 이벤트 로그 <span>루팡 <b id="lupinCount">0</b>회</span></h3>
+        <ul id="log"></ul>
+      </aside>
+    </section>
+  </div>
+</div>
+
+<div class="boss" id="boss">
+  <div class="walker">👨‍💼💨</div>
+  <h2>🚨 팀장님 접근 중!</h2>
+  <div class="sec"><span id="bossSec">3.0</span>초 안에 화면을 전환하세요</div>
+  <div class="tbar"><i id="bossBar"></i></div>
+  <button id="altTab">Alt+Tab! 업무 화면으로 전환 <kbd>Space</kbd></button>
+</div>
+
+<div class="modal" id="modal"><div class="dialog" id="dialog"></div></div>
+
+<script>
+const START = 13 * 60, END = 18 * 60;
+const KEYS = ['work', 'mental', 'susp'];
+const NAMES = { work: '업무', mental: '멘탈', susp: '의심도' };
+const $ = s => document.querySelector(s);
+const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const clamp = v => Math.max(0, Math.min(100, v));
+const fmt = min => {
+  const h = Math.floor(min / 60), m = min % 60;
+  return `${h < 12 ? '오전' : '오후'} ${h > 12 ? h - 12 : h}:${String(m).padStart(2, '0')}`;
+};
+
+let S = null, shown = { work: 0, mental: 0, susp: 0 };
+let bossTimer = null, bossCount = null, screenTimer = null, raf = null;
+let modalBtn = null, modalAt = 0;
+
+/* ---------------- 대사 ---------------- */
+const WORK_MSG = [
+  '엑셀 셀 병합을 풀었다가 다시 병합했다. 생산성 +1',
+  '메일 3통에 "확인 부탁드립니다 :)"를 붙여 보냈다.',
+  '보고서 폰트를 맑은 고딕 → 나눔고딕 → 맑은 고딕으로 바꿨다.',
+  'PPT 도형 정렬을 12분 동안 맞췄다. 완벽하다.',
+  '진짜로 일을 했다. 스스로도 조금 놀랐다.',
+  '"최종_진짜최종(3).xlsx"를 "최종_진짜최종(4).xlsx"로 저장했다.',
+  '회의록을 정리했다. 결론은 "추후 논의"였다.',
+];
+const WEBTOON_MSG = [
+  '웹툰 3화 정주행. 베스트 댓글까지 정독했다.',
+  '"다음 화 미리보기" 결제 버튼 앞에서 5분째 고민 중...',
+  '웃음을 참느라 어깨가 떨렸다. 옆자리가 쳐다본다.',
+  '주인공이 회사에 사표를 던졌다. 대리만족 MAX.',
+  '창 크기를 엑셀 셀 하나만 하게 줄여서 봤다. 장인의 기술.',
+];
+const COFFEE_MSG = [
+  '믹스커피 타는 김에 탕비실 과자도 털었다.',
+  '정수기 앞에서 옆 팀 대리와 5분간 날씨 얘기를 했다.',
+  '커피 머신이 예열 중이다. 나도 예열 중이다.',
+  '얼음을 하나씩 정성껏 넣었다. 장인정신이 필요한 작업이다.',
+];
+const TOILET_MSG = [
+  '화장실 칸에서 쇼츠를 봤다. 다리가 저리다.',
+  '세면대 거울을 보며 "할 수 있다"를 세 번 외쳤다.',
+  '손을 3분 동안 씻었다. 위생은 중요하니까.',
+];
+const FAKE_MSG = [
+  '엑셀 창을 띄우고 스크롤만 위아래로 내렸다.',
+  '키보드를 의미 없이 빠르게 두드렸다. 타건감이 좋다.',
+  '미간을 찌푸리고 모니터를 노려봤다. 아주 바빠 보인다.',
+  '빈 메일 작성 창을 띄워 놓고 진지한 표정을 지었다.',
+  '전화 수화기를 들고 "네, 네, 확인해 보겠습니다"를 반복했다. (상대방 없음)',
+];
+const DODGE_MSG = [
+  '0.2초 만에 엑셀 화면으로 전환했다.',
+  '팀장님: "오, 열심히 하네?" 나: "하하 네..."',
+  '손가락이 기억하는 그 단축키. 오늘도 살았다.',
+  '팀장님이 본 건 아름다운 피벗 테이블뿐이었다.',
+];
+
+/* ---------------- 행동 ---------------- */
+const ACTIONS = [
+  { icon: '💻', name: '업무하기', hint: '업무 ▲ · 멘탈 ▼ · 의심 ▼', min: 20, mode: 'work',
+    run: () => ({ d: { work: rand(9, 14), mental: -rand(7, 10), susp: -rand(5, 8) }, msg: pick(WORK_MSG), type: 'work' }) },
+  { icon: '📱', name: '몰래 웹툰 보기', hint: '멘탈 ▲▲ · 의심 ▲', min: 20, mode: 'webtoon', lupin: true,
+    run: () => ({ d: { mental: rand(15, 20), susp: rand(11, 16) }, msg: pick(WEBTOON_MSG), type: 'slack' }) },
+  { icon: '☕', name: '커피 타러 가기', hint: '멘탈 ▴ · 의심 ▾', min: 10, mode: 'coffee', lupin: true,
+    run: () => ({ d: { mental: rand(5, 8), susp: -rand(3, 5) }, msg: pick(COFFEE_MSG), type: 'slack' }) },
+  { icon: '🚽', name: '화장실로 도피', hint: '멘탈 ▲ · 자주 가면 의심 ▲▲', min: 15, mode: 'toilet', lupin: true,
+    run: () => {
+      const recent = S.toilets.filter(t => S.time - t < 90).length;
+      S.toilets.push(S.time);
+      const susp = [2, 10, 22, 35][Math.min(recent, 3)];
+      if (recent >= 2) return { d: { mental: rand(8, 11), susp }, type: 'bad',
+        msg: `팀장님: "김대리, 오늘 화장실만 ${S.toilets.length}번째인데... 배 괜찮아요?"` };
+      if (recent === 1) return { d: { mental: rand(10, 13), susp }, type: 'slack',
+        msg: '자리로 돌아오는데 팀장님과 눈이 마주쳤다. 아까도 마주쳤던 것 같다.' };
+      return { d: { mental: rand(10, 14), susp }, msg: pick(TOILET_MSG), type: 'slack' };
+    } },
+  { icon: '🖥️', name: '업무하는 척하기', hint: '업무 ▴ · 의심 ▼▼', min: 15, mode: 'fake', lupin: true,
+    run: () => ({ d: { work: rand(1, 2), mental: -rand(1, 3), susp: -rand(13, 18) }, msg: pick(FAKE_MSG), type: 'slack' }) },
+];
+
+/* ---------------- 랜덤 이벤트 ---------------- */
+const slacking = () => ['webtoon', 'coffee', 'toilet'].includes(S.mode);
+const EVENTS = [
+  { id: 'standup', w: 3, type: 'bad', text: '⚠️ 팀장님이 자리에서 일어났습니다.',
+    sub: '화장실 방향인지 내 자리 방향인지 아직 알 수 없다...', d: { susp: 3 },
+    after: () => setTimeout(() => { if (Math.random() < 0.7) triggerBoss(); }, 1300) },
+  { id: 'behind', w: 2, text: '😱 팀장님이 갑자기 뒤에서 나타났습니다!',
+    run: () => S.mode === 'webtoon'
+      ? { type: 'bad', sub: 'Alt+Tab 할 틈도 없었다. 모니터엔 웹툰이 그대로... "재밌어요?"', d: { susp: 18, mental: -10 } }
+      : slacking()
+        ? { type: 'bad', sub: '자리에 없는 걸 들켰다. "김대리 어디 갔어요?" 메신저가 와 있다.', d: { susp: 12, mental: -5 } }
+        : { type: 'good', sub: '마침 엑셀을 보고 있었다. 팀장님: "오~ 열심히 하네?"', d: { susp: -8, mental: 3 } } },
+  { id: 'meeting', w: 3, type: 'bad', text: '📢 갑작스러운 회의가 잡혔습니다.',
+    sub: '30분 회의의 결론: "다음 주에 다시 논의하시죠."', d: { time: 30, mental: -8, work: 4, susp: -5 } },
+  { id: 'chat', w: 3, type: 'neutral', text: '💬 옆자리 직원이 말을 걸어옵니다.',
+    sub: '코인 얘기 15분째. "형 이번엔 진짜야" 맞장구 스킬이 상승했다.', d: { time: 15, mental: 4 } },
+  { id: 'snack', w: 3, type: 'good', text: '🍪 누가 간식을 돌렸습니다.',
+    sub: '회사 생활의 8할은 간식이다. 나머지 2할도 간식이다.', d: { mental: 10 } },
+  { id: 'early', w: 2, once: true, type: 'good', cond: () => S.endTime - S.time > 60,
+    text: '🎉 대표님이 오늘 30분 일찍 퇴근하라고 합니다!', sub: '대표님... 오늘부터 당신의 팬입니다.', d: { end: -30, mental: 15 } },
+  { id: 'lastmin', w: 8, once: true, type: 'bad', cond: () => S.endTime - S.time <= 50,
+    text: '📨 퇴근 10분 전에 업무 요청이 왔습니다.',
+    sub: '"간단한 건데요~" 간단했던 적은 단 한 번도 없었다.', d: { end: 30, mental: -15, work: 3 } },
+  { id: 'printer', w: 2, type: 'bad', text: '🖨️ 프린터가 또 용지 걸림입니다.',
+    sub: '사실 이 회사 최고의 월급루팡은 프린터다.', d: { time: 10, mental: -4 } },
+  { id: 'replyall', w: 2, type: 'bad', text: '📧 전체 메일에 "확인했습니다" 답장이 47개 달렸습니다.',
+    sub: '48번째 "확인했습니다"를 보낼지 진지하게 고민 중.', d: { mental: -5 } },
+  { id: 'update', w: 2, type: 'good', text: '🔄 Windows가 강제 업데이트를 시작했습니다.',
+    sub: '합법적인 휴식이 주어졌다. 진행률이 0%에서 움직이지 않는다.', d: { time: 15, mental: 8, susp: -5 } },
+  { id: 'dinner', w: 2, once: true, type: 'bad', text: '🍻 팀 단톡방: 오늘 저녁 회식 공지',
+    sub: '참석 여부: 자율 (필참)', d: { mental: -12 } },
+  { id: 'coffeebuy', w: 2, type: 'good', text: '☕ 팀장님이 커피를 쏘셨습니다.',
+    sub: '아이스 아메리카노에 의심도가 녹아내린다.', d: { mental: 6, susp: -8 } },
+  { id: 'vlookup', w: 2, type: 'good', text: '💡 VLOOKUP이 한 번에 성공했습니다!',
+    sub: '오늘의 운을 여기에 다 쓴 것 같다.', d: { work: 10, mental: 5 } },
+  { id: 'crash', w: 2, type: 'bad', text: '💥 저장 안 한 엑셀이 "응답 없음" 상태가 되었습니다.',
+    sub: 'Ctrl+S는 습관이 아니라 생존이다.', d: { work: -10, mental: -10 } },
+  { id: 'cake', w: 1, type: 'good', text: '🎂 탕비실에 생일 케이크가 등장했습니다!',
+    sub: '누구 생일인지는 모르지만 진심을 다해 축하했다.', d: { mental: 8, time: 10 } },
+  { id: 'hr', w: 1, once: true, type: 'bad', text: '📋 인사팀: "근무시간 PC 사용 기록 점검 예정"',
+    sub: '등골이 서늘해졌다. 브라우저 방문 기록을 지울까 고민 중.', d: { susp: 10, mental: -5 } },
+  { id: 'wifi', w: 1, type: 'neutral', text: '📶 사내 와이파이가 끊겼습니다.',
+    sub: '일도 못 하고 웹툰도 못 본다. 진정한 평등이 찾아왔다.', d: { time: 10, susp: -3 } },
+];
+
+/* ---------------- 화면 ---------------- */
+function excelHTML(fake) {
+  const labels = ['1분기 매출', '2분기 매출', '3분기 매출', '4분기 매출', '합계', '전년 대비', '목표', '달성률'];
+  let h = `<div class="xl ${fake ? '' : 'typing'}">
+    <div class="xl-top"><span class="x">X</span> 2026_하반기_실적보고_최종_진짜최종(3).xlsx
+      <span class="save">${fake ? '⌨️ Ctrl+S 연타 중...' : '✔ 자동 저장됨'}</span></div>
+    <div class="xl-formula"><b>fx</b>=SUM(B2:B9)*${fake ? '열정' : '1.05'}</div><table><tr><th></th><th>A</th>`;
+  h += ['B', 'C', 'D', 'E', 'F'].map(c => `<th>${c}</th>`).join('') + '</tr>';
+  labels.forEach((l, r) => {
+    h += `<tr><th>${r + 1}</th><td class="lbl">${l}</td>`;
+    for (let c = 0; c < 5; c++) h += `<td style="--d:${(r * 5 + c) * 25}ms">${rand(120, 9800).toLocaleString()}</td>`;
+    h += '</tr>';
+  });
+  return h + '</table>' + (fake ? '<span class="cursor" id="cursor">🖱️</span>' : '') + '</div>';
+}
+function webtoonHTML() {
+  const panels = `
+    <div class="panel p1"><span class="bubble">"이번 생엔... 반드시 칼퇴한다!"</span>🧑‍💼</div>
+    <div class="panel p2"><span class="bubble">"과장님, 그건 제 업무가 아닙니다."</span>⚡😤⚡</div>
+    <div class="panel p3"><span class="bubble">[정시퇴근 스킬이 각성했습니다]</span>✨🏃✨</div>
+    <div class="panel p4"><span class="bubble">"다들... 수고하셨습니다."</span>🌇🚪</div>`;
+  return `<div class="wt"><div class="wt-bar">📱 웹툰 · 회귀한 대리는 정시퇴근한다 · 87화 <span>🔒 시크릿 창</span></div>
+    <div class="wt-scroll"><div class="wt-strip">${panels}${panels}</div></div></div>`;
+}
+const SCREENS = {
+  work: () => excelHTML(false),
+  fake: () => excelHTML(true),
+  webtoon: webtoonHTML,
+  coffee: () => `<div class="scene coffee"><div class="big">☕<span class="steam">〰</span></div>
+    <p>탕비실에서 믹스커피 2봉 + 얼음 정밀 조제 중...</p>
+    <small>탕비실 정수기 앞은 회사에서 가장 평화로운 곳이다.</small></div>`,
+  toilet: () => `<div class="scene toilet"><div class="big">🚽</div>
+    <span class="status-away"><i></i>메신저 상태: 자리 비움</span>
+    <p>오늘의 화장실 방문 ${S.toilets.length}회차</p>
+    <small>${S.toilets.length >= 3 ? '슬슬 팀장님이 횟수를 세고 있는 것 같다...' : '이곳은 상사의 권한이 닿지 않는 유일한 성역.'}</small></div>`,
+};
+const TAB = { work: '📗 Excel', fake: '📗 Excel', webtoon: '🌐 Chrome (시크릿)', coffee: '🔒 화면 잠금', toilet: '🔒 화면 잠금' };
+
+function setScreen(mode) {
+  S.mode = mode;
+  clearInterval(screenTimer);
+  $('#screen').innerHTML = SCREENS[mode]();
+  $('#appTab').textContent = TAB[mode];
+  if (mode === 'fake' || mode === 'work') {
+    screenTimer = setInterval(() => {
+      const cells = document.querySelectorAll('#screen td:not(.lbl)');
+      cells.forEach(c => c.classList.remove('hl'));
+      const c = pick([...cells]);
+      if (!c) return;
+      c.classList.add('hl');
+      if (mode === 'work') c.textContent = rand(120, 9800).toLocaleString();
+      const cur = $('#cursor');
+      if (cur) { cur.style.left = c.offsetLeft + 20 + 'px'; cur.style.top = c.offsetTop + 70 + 'px'; }
+    }, mode === 'fake' ? 380 : 700);
+  }
+}
+function flashMonitor() {
+  const m = $('#monitor');
+  m.classList.remove('switch'); void m.offsetWidth; m.classList.add('switch');
+}
+
+/* ---------------- 상태/렌더 ---------------- */
+function newState() {
+  return { time: START, endTime: END, work: 0, mental: 70, susp: 15, lupin: 0, caught: 0, dodges: 0,
+    toilets: [], mode: 'work', busy: false, boss: false, modal: false, playing: false, used: {},
+    lastBoss: 0, startAt: Date.now() };
+}
+
+function render() {
+  $('#time').textContent = fmt(S.time);
+  $('#miniClock').textContent = fmt(S.time);
+  $('#endTime').textContent = fmt(S.endTime);
+  $('#remain').textContent = `퇴근까지 ${Math.max(0, S.endTime - S.time)}분`;
+  $('#dayFill').style.width = clamp((S.time - START) / (S.endTime - START) * 100) + '%';
+  KEYS.forEach(k => $(`#bar-${k}`).style.width = S[k] + '%');
+  $('#stat-mental').dataset.level = S.mental <= 25 ? 'low' : S.mental <= 50 ? 'mid' : '';
+  $('#stat-susp').dataset.level = S.susp >= 70 ? 'high' : S.susp >= 40 ? 'mid' : '';
+  $('#lupinCount').textContent = S.lupin;
+  document.body.classList.toggle('danger', S.playing && (S.susp >= 70 || S.mental <= 20));
+  const recent = S.toilets.filter(t => S.time - t < 90).length;
+  $('#toiletBadge').textContent = recent ? `최근 ${recent}회` : '';
+  animateNumbers();
+}
+function animateNumbers() {
+  if (raf) return;
+  const step = () => {
+    let moving = false;
+    KEYS.forEach(k => {
+      const diff = S[k] - shown[k];
+      if (Math.abs(diff) < 0.5) shown[k] = S[k];
+      else { shown[k] += diff * 0.14; moving = true; }
+      $(`#val-${k}`).textContent = Math.round(shown[k]);
+    });
+    raf = moving ? requestAnimationFrame(step) : null;
+  };
+  raf = requestAnimationFrame(step);
+}
+function floatText(id, text, good) {
+  const s = document.createElement('span');
+  s.className = 'float ' + (good ? 'good' : 'bad');
+  s.textContent = text;
+  $('#stat-' + id).appendChild(s);
+  setTimeout(() => s.remove(), 1250);
+}
+function apply(d = {}) {
+  KEYS.forEach(k => {
+    if (!d[k]) return;
+    const before = S[k];
+    S[k] = clamp(S[k] + d[k]);
+    const real = S[k] - before;
+    if (real) floatText(k, (real > 0 ? '+' : '') + real, k === 'susp' ? real < 0 : real > 0);
+  });
+  if (d.time) { S.time += d.time; floatText('time', `+${d.time}분`, false); }
+  if (d.end) { S.endTime += d.end; floatText('time', `퇴근 ${d.end > 0 ? '+' : ''}${d.end}분`, d.end < 0); }
+  render();
+}
+function chips(d = {}) {
+  const out = [];
+  KEYS.forEach(k => { if (d[k]) out.push([`${NAMES[k]} ${d[k] > 0 ? '+' : ''}${d[k]}`, k === 'susp' ? d[k] < 0 : d[k] > 0]); });
+  if (d.time) out.push([`시간 +${d.time}분`, false]);
+  if (d.end) out.push([`퇴근 ${d.end > 0 ? '+' : ''}${d.end}분`, d.end < 0]);
+  return `<div class="chips">${out.map(([t, g]) => `<span class="chip ${g ? 'good' : 'bad'}">${t}</span>`).join('')}</div>`;
+}
+function log(html, type = 'neutral') {
+  const li = document.createElement('li');
+  li.className = type;
+  li.innerHTML = `<span class="t">${fmt(S.time)}</span>${html}`;
+  const ul = $('#log');
+  ul.prepend(li);
+  ul.scrollTop = 0;
+  while (ul.children.length > 80) ul.lastChild.remove();
+}
+function toast(title, sub, d, type) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.innerHTML = `<b>${title}</b>${sub}${chips(d)}`;
+  $('#toasts').prepend(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, 3600);
+}
+
+/* ---------------- 행동 처리 ---------------- */
+const canAct = () => S.playing && !S.busy && !S.boss && !S.modal;
+function updateButtons() {
+  document.querySelectorAll('.action').forEach(b => b.disabled = !canAct());
+}
+function act(i) {
+  const a = ACTIONS[i];
+  if (!a || !canAct()) return;
+  S.busy = true; updateButtons();
+  const btn = document.querySelectorAll('.action')[i];
+  btn.classList.add('running');
+  if (S.mode !== a.mode || a.mode === 'toilet') { setScreen(a.mode); flashMonitor(); }
+  setTimeout(() => {
+    btn.classList.remove('running');
+    if (!S.playing) return;
+    const r = a.run();
+    if (a.lupin) S.lupin++;
+    S.time += a.min;
+    apply(r.d);
+    log(`${a.icon} ${r.msg}`, r.type);
+    if (a.mode === 'toilet') setScreen('toilet');
+    if (checkEnd()) return;
+    if (Math.random() < 0.33) {
+      const ev = pickEvent();
+      if (ev) return setTimeout(() => { if (S.playing) runEvent(ev); finish(); }, 450);
+    }
+    finish();
+  }, 550);
+}
+function finish() {
+  S.busy = false;
+  if (checkEnd()) return;
+  updateButtons();
+  if (S.mode === 'webtoon' && Math.random() < 0.15) setTimeout(triggerBoss, 800);
+}
+function pickEvent() {
+  const list = EVENTS.filter(e => !(e.once && S.used[e.id]) && (!e.cond || e.cond()));
+  let r = Math.random() * list.reduce((s, e) => s + e.w, 0);
+  return list.find(e => (r -= e.w) < 0);
+}
+function runEvent(e) {
+  if (e.once) S.used[e.id] = true;
+  const r = e.run ? e.run() : e;
+  apply(r.d);
+  toast(e.text, r.sub, r.d, r.type);
+  log(`<b>${e.text}</b><br>${r.sub}`, r.type);
+  if (e.after) e.after();
+}
+
+/* ---------------- 상사 시스템 ---------------- */
+function triggerBoss() {
+  if (!S.playing || S.boss || S.modal || S.busy) return;
+  S.boss = true; updateButtons();
+  $('#boss').classList.add('show');
+  document.body.classList.add('alert');
+  const bar = $('#bossBar');
+  bar.style.transition = 'none'; bar.style.width = '100%'; void bar.offsetWidth;
+  bar.style.transition = 'width 3s linear'; bar.style.width = '0%';
+  const t0 = Date.now();
+  bossCount = setInterval(() => $('#bossSec').textContent = Math.max(0, 3 - (Date.now() - t0) / 1000).toFixed(1), 50);
+  bossTimer = setTimeout(bossFail, 3000);
+  log('🚨 팀장님 접근 중! 발소리가 가까워진다...', 'boss');
+}
+function closeBoss() {
+  clearTimeout(bossTimer); clearInterval(bossCount);
+  $('#boss').classList.remove('show');
+  document.body.classList.remove('alert');
+  S.boss = false; S.lastBoss = Date.now();
+}
+function dodge() {
+  if (!S.boss) return;
+  closeBoss();
+  S.dodges++;
+  const wasSlack = slacking();
+  setScreen('work'); flashMonitor();
+  apply({ susp: wasSlack ? -2 : -4 });
+  log(`⌨️ <b>Alt+Tab 성공!</b> ${pick(DODGE_MSG)}`, 'good');
+  updateButtons();
+}
+function bossFail() {
+  closeBoss();
+  const m = S.mode;
+  if (m === 'work' || m === 'fake') {
+    apply({ susp: -5 });
+    log('👔 팀장님이 열일하는 모습을 보고 흐뭇하게 지나갔다.', 'good');
+  } else if (m === 'toilet') {
+    apply({ susp: 8 });
+    log('🪑 팀장님이 텅 빈 자리를 한참 바라보다 갔다...', 'bad');
+  } else {
+    const p = 0.2 + S.susp / 100 * 0.65 + (m === 'webtoon' ? 0.15 : 0);
+    if (Math.random() < p) return caught();
+    apply({ susp: 6 });
+    log('😮‍💨 팀장님이 힐끗 보더니 그냥 지나갔다. 심장이 멈출 뻔했다.', 'neutral');
+  }
+  updateButtons();
+  checkEnd();
+}
+function caught() {
+  S.caught++;
+  const app = $('#app');
+  app.classList.remove('shake'); void app.offsetWidth; app.classList.add('shake');
+  const scene = {
+    webtoon: '모니터에는 「회귀한 대리는 정시퇴근한다」 87화가 떡하니 떠 있다.',
+    coffee: '탕비실에서 오늘만 네 번째 믹스커피를 타다가 딱 마주쳤다.',
+  }[S.mode] || '변명할 틈도 없었다.';
+  showModal(`<div class="big-emoji">👨‍💼</div>
+    <h2>팀장님: "지금 뭐 하고 있었어요?"</h2>
+    <p>${scene}<br>${S.caught >= 2 ? '"이번이 벌써 두 번째네요. 잠깐 얘기 좀 할까요?"' : '"...요즘 많이 한가한가 봐요?"'}</p>
+    <div class="penalty"><span class="chip bad">멘탈 -15</span><span class="chip bad">의심도 +20</span></div>
+    <button class="primary danger">죄송합니다... 🙇</button><span class="enter-hint">Enter</span>`, () => {
+    apply({ mental: -15, susp: 20 });
+    log(`🙇 <b>팀장님께 걸렸다.</b> (적발 ${S.caught}회)`, 'bad');
+    setScreen('work');
+    updateButtons();
+    checkEnd();
+  });
+}
+
+/* ---------------- 모달 / 종료 ---------------- */
+function showModal(html, onClose) {
+  S.modal = true; updateButtons();
+  $('#dialog').innerHTML = html;
+  $('#modal').classList.add('show');
+  modalAt = Date.now();
+  modalBtn = $('#dialog .primary');
+  modalBtn.onclick = () => {
+    $('#modal').classList.remove('show');
+    S.modal = false; modalBtn = null;
+    onClose && onClose();
+  };
+}
+function checkEnd() {
+  if (!S.playing) return true;
+  if (S.susp >= 100) return end('caught'), true;
+  if (S.mental <= 0) return end('burnout'), true;
+  if (S.time >= S.endTime) return end(), true;
+  return false;
+}
+function getEnding(force) {
+  const { work, mental, susp, lupin, caught } = S;
+  if (force === 'caught' || caught >= 3 || susp >= 90)
+    return { e: '🚨', t: '월급루팡 적발', q: '팀장님은 당신의 Alt+Tab 속도보다 빨랐다.' };
+  if (force === 'burnout' || mental <= 10)
+    return { e: '😵', t: '번아웃 엔딩', q: `업무 진행도 ${work}%. 멘탈 ${mental}%. 우리는 이것을 성공이라고 부를 수 있을까?` };
+  if (work < 50)
+    return { e: '💀', t: '야근 확정', q: '퇴근은 존재하지 않았다.', s: `남은 업무 ${100 - work}%는 오늘 밤 당신과 함께합니다.` };
+  if (work >= 70 && mental >= 50 && lupin >= 6 && susp < 50 && caught === 0)
+    return { e: '🏆', t: 'S급 월급루팡', q: '일도 했고 놀기도 했다. 아무도 당신이 놀았다는 사실을 모른다.' };
+  if (work >= 90 && lupin <= 2)
+    return { e: '🤖', t: '모범 사원', q: '회사는 당신의 헌신을 기억하지 않는다. 하지만 연말 평가는... 아마도?' };
+  if (work >= 70)
+    return { e: '😎', t: '프로 직장인', q: '할 일은 했다. 그 이상은 회사 욕심이다.' };
+  return { e: '🐢', t: '아슬아슬 생존', q: '할 건 했다고 우길 수 있는 수준. 나머지는 내일의 내가 하겠지.' };
+}
+function end(force) {
+  if (!S.playing) return;
+  S.playing = false;
+  closeBoss();
+  clearInterval(screenTimer);
+  document.body.classList.remove('danger', 'alert');
+  updateButtons();
+  const e = getEnding(force);
+  log(force ? '🏁 <b>오늘의 근무가 강제 종료되었습니다.</b>' : '🏁 <b>퇴근 시간입니다! 컴퓨터 끄고 탈출!</b>', 'good');
+  setTimeout(() => showModal(`<div class="big-emoji">${e.e}</div>
+    <div class="end-tag">TODAY'S ENDING</div>
+    <h1>${e.t}</h1>
+    <p class="quote">"${e.q}"</p>${e.s ? `<p>${e.s}</p>` : ''}
+    <div class="end-stats">
+      <div><b>${S.work}%</b><span>📊 업무 진행도</span></div>
+      <div><b>${S.mental}</b><span>🧠 남은 멘탈</span></div>
+      <div><b>${S.susp}</b><span>👀 상사 의심도</span></div>
+      <div><b>${S.lupin}회</b><span>🦹 월급루팡 횟수</span></div>
+      <div><b>${S.dodges}회</b><span>⌨️ Alt+Tab 성공</span></div>
+      <div><b>${S.caught}회</b><span>🚨 적발 횟수</span></div>
+    </div>
+    <button class="primary">다시 출근하기 🔁</button><span class="enter-hint">Enter</span>`, startGame), 900);
+}
+
+/* ---------------- 시작 ---------------- */
+function startGame() {
+  S = newState();
+  S.playing = true;
+  KEYS.forEach(k => shown[k] = S[k]);
+  $('#log').innerHTML = '';
+  $('#toasts').innerHTML = '';
+  setScreen('work');
+  render();
+  updateButtons();
+  log('🏢 점심 먹고 복귀 완료. 식곤증과의 전쟁이 시작된다.', 'neutral');
+  log('💬 팀장님: "오후에 보고서 마무리 부탁해요~"', 'neutral');
+}
+
+// 실시간 상사 순찰
+setInterval(() => {
+  if (!S || !S.playing || S.boss || S.modal || S.busy) return;
+  if (Date.now() - Math.max(S.lastBoss, S.startAt) < 7000) return;
+  if (Math.random() < 0.03 + S.susp / 100 * 0.05) triggerBoss();
+}, 1000);
+
+// 버튼 생성
+$('#actions').innerHTML = ACTIONS.map((a, i) => `
+  <button class="action" data-i="${i}">
+    <span class="key">${i + 1}</span>${i === 3 ? '<span class="badge" id="toiletBadge"></span>' : ''}
+    <span class="ic">${a.icon}</span>
+    <div class="nm">${a.name}</div>
+    <div class="ht">${a.hint}<br>⏱ ${a.min}분</div>
+  </button>`).join('');
+document.querySelectorAll('.action').forEach(b => b.onclick = () => act(+b.dataset.i));
+$('#altTab').onclick = dodge;
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); if (S && S.boss) dodge(); return; }
+  if (e.key === 'Enter' && S && S.modal && modalBtn && Date.now() - modalAt > 600) { e.preventDefault(); modalBtn.click(); return; }
+  if (/^[1-5]$/.test(e.key)) act(+e.key - 1);
+});
+
+// 첫 화면
+S = newState();
+KEYS.forEach(k => shown[k] = S[k]);
+setScreen('work');
+render();
+updateButtons();
+showModal(`<div class="big-emoji">💼</div>
+  <h1>월급루팡 서바이벌</h1>
+  <p>오후 1시. 점심을 먹고 자리로 돌아온 당신.<br>퇴근 시간 <b>오후 6시</b>까지 살아남아라.</p>
+  <ul class="rules">
+    <li>📊 <b>업무 진행도</b>는 적당히 채우고 (최소 50%)</li>
+    <li>🧠 <b>멘탈</b>은 0이 되지 않게 지키고</li>
+    <li>👀 <b>상사 의심도</b>는 최대한 낮게</li>
+    <li>🚨 팀장님이 다가오면 <b>3초 안에 Alt+Tab!</b></li>
+  </ul>
+  <div class="keys"><span><kbd>1</kbd>~<kbd>5</kbd> 행동 선택</span><span><kbd>Space</kbd> Alt+Tab (위기 회피)</span></div>
+  <button class="primary">출근하기 🏢</button><span class="enter-hint">Enter</span>`, startGame);
+</script>
+</body>
+</html>
